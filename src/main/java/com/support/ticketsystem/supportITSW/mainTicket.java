@@ -7,6 +7,11 @@ import java.awt.event.ActionListener;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
+import com.support.ticketsystem.model.Ticket;
+import org.springframework.http.*;
+import org.springframework.web.client.RestTemplate;
+
+
 public class mainTicket extends JFrame {
     // UI Components
     private JTextField titleField;
@@ -120,17 +125,54 @@ public class mainTicket extends JFrame {
         String category = (String) categoryComboBox.getSelectedItem();
         String creationDate = creationDateLabel.getText();
 
-        JOptionPane.showMessageDialog(this, "Ticket Created:\n" +
-                "Title: " + title + "\n" +
-                "Description: " + description + "\n" +
-                "Priority: " + priority + "\n" +
-                "Category: " + category + "\n" +
-                "Date: " + creationDate, "Success", JOptionPane.INFORMATION_MESSAGE);
+        // Créer un objet Ticket
+        Ticket ticket = new Ticket();
+        ticket.setTitle(title);
+        ticket.setDescription(description);
+        ticket.setPriority(priority);
+        ticket.setCategory(category);
+        ticket.setCreationDate(creationDate);
+
+        // Création de RestTemplate avec authentification
+        RestTemplate restTemplate = new RestTemplate();
+        String url = "http://localhost:8080/api/tickets";
+
+        // Ajouter les headers avec Basic Auth
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBasicAuth("admin", "admin"); // Remplace par tes identifiants Spring Security
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        HttpEntity<Ticket> request = new HttpEntity<>(ticket, headers);
+
+        // Envoyer la requête HTTP POST
+        try {
+            ResponseEntity<Ticket> response = restTemplate.exchange(url, HttpMethod.POST, request, Ticket.class);
+
+            // Vérifier si la requête a réussi
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                Ticket createdTicket = response.getBody();
+                JOptionPane.showMessageDialog(this, "Ticket Created:\n" +
+                        "Title: " + createdTicket.getTitle() + "\n" +
+                        "Description: " + createdTicket.getDescription() + "\n" +
+                        "Priority: " + createdTicket.getPriority() + "\n" +
+                        "Category: " + createdTicket.getCategory() + "\n" +
+                        "Date: " + createdTicket.getCreationDate(), "Success", JOptionPane.INFORMATION_MESSAGE);
+            } else {
+                JOptionPane.showMessageDialog(this, "Error creating ticket. Server returned: " + response.getStatusCode(), "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Exception: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        }
+
+        // Reset form fields
         titleField.setText("");
         descriptionArea.setText("");
         priorityComboBox.setSelectedIndex(0);
         categoryComboBox.setSelectedIndex(0);
     }
+
+
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> new mainTicket().setVisible(true));
