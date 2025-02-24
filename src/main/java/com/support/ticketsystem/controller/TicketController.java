@@ -27,7 +27,7 @@ public class TicketController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Ticket> updateTicketStatus(@PathVariable String id, @RequestBody Ticket ticket) {
+    public ResponseEntity<Ticket> updateTicketStatus(@PathVariable Long id, @RequestBody Ticket ticket) {
         // Find the ticket by ID and update the status
         Ticket updatedTicket = ticketService.updateTicketStatus(id, ticket);
 

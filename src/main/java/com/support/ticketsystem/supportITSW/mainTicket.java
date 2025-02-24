@@ -12,13 +12,15 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+
+import com.support.ticketsystem.model.AuditLog;
 import com.support.ticketsystem.model.Ticket;
-import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.*;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
 public class mainTicket extends JFrame {
+    private List<AuditLog> auditLog = new ArrayList<>();  // List to store the audit logs
     // UI Components
     private JTextField titleField;
     private JTextArea descriptionArea;
@@ -32,6 +34,8 @@ public class mainTicket extends JFrame {
     private JTable statusTable;
 
     public mainTicket() {
+        //this.auditLogService = auditLogService;
+        auditLog = new ArrayList<>(); // Initialize the in-memory log
         initComponents();
     }
 
@@ -54,6 +58,11 @@ public class mainTicket extends JFrame {
         // Create the Status Tracking Panel
         statusTrackingPanel = createStatusTrackingPanel();
         tabbedPane.addTab("Status Tracking", statusTrackingPanel);
+
+        // Create the Audit Log Panel
+        JPanel auditLogPanel = createAuditLogPanel();
+        tabbedPane.addTab("Audit Log", auditLogPanel);
+
 
         // Add Tabbed Pane to the JFrame
         add(tabbedPane);
@@ -181,6 +190,7 @@ public class mainTicket extends JFrame {
             String searchId = idField.getText().trim();
             String selectedStatus = (String) statusComboBox.getSelectedItem();
             filterTickets(searchId, selectedStatus);
+
         });
 
         // Add components to search panel
@@ -238,6 +248,96 @@ public class mainTicket extends JFrame {
         return panel;
     }
 
+    private JPanel createAuditLogPanel() {
+        JPanel panel = new JPanel();
+        panel.setLayout(new BorderLayout());
+
+        // Create table for displaying audit logs
+        String[] columnNames = {"Ticket ID", "Old Status", "New Status", "Comment", "Timestamp"};
+        DefaultTableModel model = new DefaultTableModel(columnNames, 0);
+        JTable auditLogTable = new JTable(model);
+
+        // Load logs into the table
+        loadAuditLogs(model);
+
+        JScrollPane scrollPane = new JScrollPane(auditLogTable);
+        panel.add(scrollPane, BorderLayout.CENTER);
+
+        return panel;
+    }
+
+
+    private void loadAuditLogs(DefaultTableModel model) {
+        // Clear existing rows in the table
+        model.setRowCount(0);
+
+        // Print the auditLog list for debugging
+        System.out.println("Audit Log Entries: " + auditLog);
+
+        // Add each audit log entry to the table
+        for (AuditLog log : auditLog) {
+            model.addRow(new Object[]{
+                    log.getTicketId(),
+                    log.getOldStatus(),
+                    log.getNewStatus(),
+                    log.getComment(),
+                    log.getTimestamp()
+            });
+        }
+    }
+
+
+
+    private void updateStatus(Ticket ticket) {
+        // Get the old status from the table
+        String oldStatus = (String) statusTable.getValueAt(statusTable.getSelectedRow(), 4);
+
+        // Update the ticket status (this would update the ticket object itself)
+        //ticket.setStatus(newStatus); // Assuming you have a newStatus variable that you want to set
+    }
+    public void logAudit(Ticket ticket, String oldStatus, String comment) {
+        System.out.println("Logging audit for ticket " + ticket.getId() + " with status change from " + oldStatus + " to " + ticket.getStatus());
+        auditLog.add(new AuditLog(ticket.getId(), oldStatus, ticket.getStatus(), comment, getCurrentDate()));
+
+        auditLog.add(new AuditLog(ticket.getId(), oldStatus, ticket.getStatus(), comment, getCurrentDate()));
+        System.out.println("Audit Log size: " + auditLog.size());
+
+    }
+
+
+
+
+
+
+    private void handleTicketStatusUpdate(Ticket ticket) {
+        // Get the old status before updating
+        String oldStatus = ticket.getStatus();
+
+        // Update the ticket status (this changes the status of the ticket)
+        updateStatus(ticket);
+
+        // Log the audit entry with old status and new status
+        String comment = "Status updated"; // You can adjust this based on the specific update
+        logAudit(ticket, oldStatus, comment);
+
+        // Refresh the table to display updated data
+        loadAuditLogs((DefaultTableModel) ((JTable) ((JScrollPane) tabbedPane.getComponentAt(2)).getViewport().getView()).getModel());
+    }
+
+    public void updateStatusForTicket(Ticket ticket) {
+        // Now you can use the ticket object
+        String oldStatus = ticket.getStatus();  // Capture old status
+        ticket.setStatus("New");         // Update ticket status
+
+        // Log the audit entry
+        logAudit(ticket, oldStatus, "Status updated to: New");
+
+        // Refresh the audit log table
+        handleTicketStatusUpdate(ticket);
+    }
+
+
+
 
 
     private void updateTicketStatus(Ticket ticket) {
@@ -246,6 +346,7 @@ public class mainTicket extends JFrame {
             JOptionPane.showMessageDialog(this, "Ticket ID is missing.", "Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
+        //oldStatus = (String) statusTable.getValueAt(statusTable.getSelectedRow(), 4); // Get the old status from the table
 
         RestTemplate restTemplate = new RestTemplate();
         String url = "http://localhost:8080/api/tickets/" + ticket.getId(); // Assuming the URL includes ticket ID (as Long)
