@@ -4,11 +4,13 @@ import javax.swing.*;
 import javax.swing.event.CellEditorListener;
 import javax.swing.event.ChangeEvent;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableRowSorter;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import com.support.ticketsystem.model.Ticket;
 import org.springframework.core.ParameterizedTypeReference;
@@ -133,10 +135,60 @@ public class mainTicket extends JFrame {
         return panel;
     }
 
+    private void filterTickets(String ticketId, String status) {
+        DefaultTableModel model = (DefaultTableModel) statusTable.getModel();
+        TableRowSorter<DefaultTableModel> sorter = new TableRowSorter<>(model);
+        statusTable.setRowSorter(sorter);
+
+        List<RowFilter<Object, Object>> filters = new ArrayList<>();
+
+        // Filter by Ticket ID (if not empty)
+        if (!ticketId.isEmpty()) {
+            filters.add(RowFilter.regexFilter("^" + ticketId + "$", 0)); // Exact match on Ticket ID column (index 0)
+        }
+
+        // Filter by Status (if not "All")
+        if (!status.equals("All")) {
+            filters.add(RowFilter.regexFilter(status, 4)); // Status column is index 4
+        }
+
+        // Apply filters
+        sorter.setRowFilter(RowFilter.andFilter(filters));
+    }
+
+
     // Method to create the Status Tracking Panel
     private JPanel createStatusTrackingPanel() {
         JPanel panel = new JPanel();
         panel.setLayout(new BorderLayout());
+
+        // Create a panel for search inputs
+        JPanel searchPanel = new JPanel();
+        searchPanel.setLayout(new FlowLayout(FlowLayout.LEFT));
+
+        // Search by Ticket ID
+        JLabel idLabel = new JLabel("Ticket ID:");
+        JTextField idField = new JTextField(10); // Input field for Ticket ID
+
+        // Search by Status
+        JLabel statusLabel = new JLabel("Status:");
+        JComboBox<String> statusComboBox = new JComboBox<>(new String[] {"All", "New", "In Progress", "Resolved"});
+
+        // Search Button
+        JButton searchButton = new JButton("Search");
+
+        searchButton.addActionListener(e -> {
+            String searchId = idField.getText().trim();
+            String selectedStatus = (String) statusComboBox.getSelectedItem();
+            filterTickets(searchId, selectedStatus);
+        });
+
+        // Add components to search panel
+        searchPanel.add(idLabel);
+        searchPanel.add(idField);
+        searchPanel.add(statusLabel);
+        searchPanel.add(statusComboBox);
+        searchPanel.add(searchButton);
 
         // Table for displaying tickets
         String[] columnNames = {"Ticket ID", "Title", "Category", "Priority", "Status", "Creation Date"};
@@ -147,46 +199,45 @@ public class mainTicket extends JFrame {
         loadTickets(model);
 
         // Make the "Status" column editable with a combo box
-        JComboBox<String> statusComboBox = new JComboBox<>(new String[] {"New", "In Progress", "Resolved"});
-        statusTable.getColumnModel().getColumn(4).setCellEditor(new DefaultCellEditor(statusComboBox));
+        JComboBox<String> statusEditorComboBox = new JComboBox<>(new String[] {"New", "In Progress", "Resolved"});
+        statusTable.getColumnModel().getColumn(4).setCellEditor(new DefaultCellEditor(statusEditorComboBox));
 
         // Add an editor listener to update the status when it changes
         statusTable.getColumnModel().getColumn(4).getCellEditor().addCellEditorListener(new CellEditorListener() {
             @Override
             public void editingStopped(ChangeEvent e) {
                 int row = statusTable.getSelectedRow();
-                if (row == -1) return;  // No row selected, exit
+                if (row == -1) return;
 
-                // Ensure all necessary values are fetched
-                String newStatus = (String) statusTable.getValueAt(row, 4); // "Status" column is index 4
-                Long ticketId = (Long) statusTable.getValueAt(row, 0); // "Ticket ID" column is index 0
+                String newStatus = (String) statusTable.getValueAt(row, 4);
+                Long ticketId = (Long) statusTable.getValueAt(row, 0);
 
-                // Ensure the ticket ID and status are available before updating
                 if (ticketId != null && newStatus != null) {
-                    // Create a ticket with the updated status and send it to the server
                     Ticket ticket = new Ticket(ticketId,
-                            (String) statusTable.getValueAt(row, 1), // Title
-                            (String) statusTable.getValueAt(row, 2), // Description
-                            (String) statusTable.getValueAt(row, 3), // Priority
-                            (String) statusTable.getValueAt(row, 4), // Category
-                            (String) statusTable.getValueAt(row, 5), // Creation Date
-                            newStatus // Updated status
+                            (String) statusTable.getValueAt(row, 1),
+                            (String) statusTable.getValueAt(row, 2),
+                            (String) statusTable.getValueAt(row, 3),
+                            (String) statusTable.getValueAt(row, 4),
+                            (String) statusTable.getValueAt(row, 5),
+                            newStatus
                     );
-                    updateTicketStatus(ticket); // Make the update call
+                    updateTicketStatus(ticket);
                 }
             }
 
             @Override
-            public void editingCanceled(ChangeEvent e) {
-                // Handle canceling the edit if needed
-            }
+            public void editingCanceled(ChangeEvent e) {}
         });
 
         JScrollPane scrollPane = new JScrollPane(statusTable);
+
+        // Add search panel on top of the table
+        panel.add(searchPanel, BorderLayout.NORTH);
         panel.add(scrollPane, BorderLayout.CENTER);
 
         return panel;
     }
+
 
 
     private void updateTicketStatus(Ticket ticket) {
