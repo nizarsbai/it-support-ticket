@@ -10,10 +10,15 @@ import javax.swing.*;
 public class ItSupportTicketApplication {
 
 	public static void main(String[] args) {
-		System.setProperty("java.awt.headless", "false"); // Désactiver le mode headless
-		//System.out.println("Is headless: " + java.awt.GraphicsEnvironment.isHeadless());
+		System.setProperty("java.awt.headless", "false"); // Disable headless mode
+
+		// Start the Spring application and get the application context
 		SpringApplication.run(ItSupportTicketApplication.class, args);
-		// Lancer l'interface Swing sur le thread de l'interface graphique
+
+		// Retrieve the AuditLogService bean from Spring's context
+		//AuditLogService auditLogService = context.getBean(AuditLogService.class);
+
+		// Start the Swing UI on the Event Dispatch Thread
 		SwingUtilities.invokeLater(() -> new mainTicket().setVisible(true));
 	}
 }
