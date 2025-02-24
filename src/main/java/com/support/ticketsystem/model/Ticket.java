@@ -1,7 +1,10 @@
 package com.support.ticketsystem.model;
 
 import jakarta.persistence.*;
+import org.springframework.web.bind.annotation.GetMapping;
+
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Entity
 @Table(name = "tickets")
@@ -15,10 +18,25 @@ public class Ticket {
     private String description;
     private String priority;
     private String category;
-    private String creationDate;  // You can change to LocalDateTime if necessary
+    private String creationDate; // You can change to LocalDateTime if necessary
+    private String status;
+
+    // No-arg constructor required by JPA
+    public Ticket() {
+    }
+
+    public Ticket(Long id, String title, String description, String priority, String category, String creationDate, String status) {
+        this.id = id;
+        this.title = title;
+        this.description = description;
+        this.priority = priority;
+        this.category = category;
+        this.creationDate = creationDate;
+        this.status = status; // Use the status passed as a parameter
+    }
+
 
     // Getters and Setters
-
     public Long getId() {
         return id;
     }
@@ -67,4 +85,12 @@ public class Ticket {
         this.creationDate = creationDate;
     }
 
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
 }

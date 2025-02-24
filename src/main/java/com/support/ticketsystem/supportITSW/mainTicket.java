@@ -1,16 +1,20 @@
 package com.support.ticketsystem.supportITSW;
 
 import javax.swing.*;
+import javax.swing.event.CellEditorListener;
+import javax.swing.event.ChangeEvent;
+import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-
+import java.util.List;
 import com.support.ticketsystem.model.Ticket;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.*;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
-
 
 public class mainTicket extends JFrame {
     // UI Components
@@ -20,6 +24,10 @@ public class mainTicket extends JFrame {
     private JComboBox<String> categoryComboBox;
     private JLabel creationDateLabel;
     private JButton submitButton;
+    private JTabbedPane tabbedPane;
+    private JPanel ticketCreationPanel;
+    private JPanel statusTrackingPanel;
+    private JTable statusTable;
 
     public mainTicket() {
         initComponents();
@@ -28,12 +36,32 @@ public class mainTicket extends JFrame {
     public void initComponents() {
         setTitle("Support Ticket System");
         setSize(600, 400);
-        setLayout(new GridBagLayout());
         setLocationRelativeTo(null);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
         // Set Application Icon
         setAppIcon();
+
+        // Create the Tabbed Pane
+        tabbedPane = new JTabbedPane();
+
+        // Create the Ticket Creation Panel
+        ticketCreationPanel = createTicketCreationPanel();
+        tabbedPane.addTab("Create Ticket", ticketCreationPanel);
+
+        // Create the Status Tracking Panel
+        statusTrackingPanel = createStatusTrackingPanel();
+        tabbedPane.addTab("Status Tracking", statusTrackingPanel);
+
+        // Add Tabbed Pane to the JFrame
+        add(tabbedPane);
+
+    }
+
+    // Method to create the Ticket Creation Panel (unchanged)
+    private JPanel createTicketCreationPanel() {
+        JPanel panel = new JPanel();
+        panel.setLayout(new GridBagLayout());
 
         // Title Label (Top of Form)
         JLabel formTitle = new JLabel("Create a New Support Ticket", JLabel.CENTER);
@@ -72,27 +100,27 @@ public class mainTicket extends JFrame {
         // Add Title at the Top
         gbc.gridx = 0; gbc.gridy = row; gbc.gridwidth = 2;
         gbc.anchor = GridBagConstraints.CENTER;
-        add(formTitle, gbc);
+        panel.add(formTitle, gbc);
 
         gbc.gridwidth = 1;
         gbc.anchor = GridBagConstraints.WEST;
 
-        gbc.gridx = 0; gbc.gridy = ++row; add(titleLabel, gbc);
-        gbc.gridx = 1; gbc.gridy = row; add(titleField, gbc);
+        gbc.gridx = 0; gbc.gridy = ++row; panel.add(titleLabel, gbc);
+        gbc.gridx = 1; gbc.gridy = row; panel.add(titleField, gbc);
 
-        gbc.gridx = 0; gbc.gridy = ++row; add(descriptionLabel, gbc);
-        gbc.gridx = 1; gbc.gridy = row; add(descriptionScroll, gbc);
+        gbc.gridx = 0; gbc.gridy = ++row; panel.add(descriptionLabel, gbc);
+        gbc.gridx = 1; gbc.gridy = row; panel.add(descriptionScroll, gbc);
 
-        gbc.gridx = 0; gbc.gridy = ++row; add(priorityLabel, gbc);
-        gbc.gridx = 1; gbc.gridy = row; add(priorityComboBox, gbc);
+        gbc.gridx = 0; gbc.gridy = ++row; panel.add(priorityLabel, gbc);
+        gbc.gridx = 1; gbc.gridy = row; panel.add(priorityComboBox, gbc);
 
-        gbc.gridx = 0; gbc.gridy = ++row; add(categoryLabel, gbc);
-        gbc.gridx = 1; gbc.gridy = row; add(categoryComboBox, gbc);
+        gbc.gridx = 0; gbc.gridy = ++row; panel.add(categoryLabel, gbc);
+        gbc.gridx = 1; gbc.gridy = row; panel.add(categoryComboBox, gbc);
 
-        gbc.gridx = 0; gbc.gridy = ++row; add(dateLabel, gbc);
-        gbc.gridx = 1; gbc.gridy = row; add(creationDateLabel, gbc);
+        gbc.gridx = 0; gbc.gridy = ++row; panel.add(dateLabel, gbc);
+        gbc.gridx = 1; gbc.gridy = row; panel.add(creationDateLabel, gbc);
 
-        gbc.gridx = 1; gbc.gridy = ++row; add(submitButton, gbc);
+        gbc.gridx = 1; gbc.gridy = ++row; panel.add(submitButton, gbc);
 
         // Add button action listener
         submitButton.addActionListener(new ActionListener() {
@@ -101,9 +129,148 @@ public class mainTicket extends JFrame {
                 submitTicket();
             }
         });
+
+        return panel;
     }
 
-    // 🔹 Method to Load Application Icon
+    // Method to create the Status Tracking Panel
+    private JPanel createStatusTrackingPanel() {
+        JPanel panel = new JPanel();
+        panel.setLayout(new BorderLayout());
+
+        // Table for displaying tickets
+        String[] columnNames = {"Ticket ID", "Title", "Category", "Priority", "Status", "Creation Date"};
+        DefaultTableModel model = new DefaultTableModel(columnNames, 0);
+        statusTable = new JTable(model); // Assign to class-level variable
+
+        // Fetch tickets from the server and display in the table
+        loadTickets(model);
+
+        // Make the "Status" column editable with a combo box
+        JComboBox<String> statusComboBox = new JComboBox<>(new String[] {"New", "In Progress", "Resolved"});
+        statusTable.getColumnModel().getColumn(4).setCellEditor(new DefaultCellEditor(statusComboBox));
+
+        // Add an editor listener to update the status when it changes
+        statusTable.getColumnModel().getColumn(4).getCellEditor().addCellEditorListener(new CellEditorListener() {
+            @Override
+            public void editingStopped(ChangeEvent e) {
+                int row = statusTable.getSelectedRow();
+                if (row == -1) return;  // No row selected, exit
+
+                // Ensure all necessary values are fetched
+                String newStatus = (String) statusTable.getValueAt(row, 4); // "Status" column is index 4
+                Long ticketId = (Long) statusTable.getValueAt(row, 0); // "Ticket ID" column is index 0
+
+                // Ensure the ticket ID and status are available before updating
+                if (ticketId != null && newStatus != null) {
+                    // Create a ticket with the updated status and send it to the server
+                    Ticket ticket = new Ticket(ticketId,
+                            (String) statusTable.getValueAt(row, 1), // Title
+                            (String) statusTable.getValueAt(row, 2), // Description
+                            (String) statusTable.getValueAt(row, 3), // Priority
+                            (String) statusTable.getValueAt(row, 4), // Category
+                            (String) statusTable.getValueAt(row, 5), // Creation Date
+                            newStatus // Updated status
+                    );
+                    updateTicketStatus(ticket); // Make the update call
+                }
+            }
+
+            @Override
+            public void editingCanceled(ChangeEvent e) {
+                // Handle canceling the edit if needed
+            }
+        });
+
+        JScrollPane scrollPane = new JScrollPane(statusTable);
+        panel.add(scrollPane, BorderLayout.CENTER);
+
+        return panel;
+    }
+
+
+    private void updateTicketStatus(Ticket ticket) {
+        // Ensure ticket ID is not null
+        if (ticket.getId() == null) {
+            JOptionPane.showMessageDialog(this, "Ticket ID is missing.", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        RestTemplate restTemplate = new RestTemplate();
+        String url = "http://localhost:8080/api/tickets/" + ticket.getId(); // Assuming the URL includes ticket ID (as Long)
+
+        // Add headers with Basic Auth
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBasicAuth("admin", "admin"); // Replace with your Spring Security credentials
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        HttpEntity<Ticket> request = new HttpEntity<>(ticket, headers);
+
+        try {
+            // Print for debugging
+            System.out.println("Updating ticket with ID: " + ticket.getId());
+            System.out.println("URL: " + url);
+
+            // Send PUT request to update the ticket
+            ResponseEntity<Ticket> response = restTemplate.exchange(url, HttpMethod.PUT, request, Ticket.class);
+
+            // Check if the request was successful
+            if (response.getStatusCode().is2xxSuccessful()) {
+                Ticket updatedTicket = response.getBody();
+                JOptionPane.showMessageDialog(this, "Ticket status updated successfully:\n" +
+                        "ID: " + updatedTicket.getId() + "\n" +
+                        "New Status: " + updatedTicket.getStatus(), "Success", JOptionPane.INFORMATION_MESSAGE);
+
+                // Reload tickets to reflect the status change
+                loadTickets((DefaultTableModel) statusTable.getModel());
+            } else {
+                JOptionPane.showMessageDialog(this, "Error updating ticket status. Server returned: " + response.getStatusCode(), "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        } catch (HttpClientErrorException e) {
+            JOptionPane.showMessageDialog(this, "HTTP Error: " + e.getStatusCode() + " - " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        } catch (Exception e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Exception: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+
+
+    // Fetch tickets from the server to display in the Status Tracking tab
+    private void loadTickets(DefaultTableModel model) {
+        // RestTemplate setup
+        RestTemplate restTemplate = new RestTemplate();
+        String url = "http://localhost:8080/api/tickets";
+
+        // Headers setup (No Auth required as per your config)
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpEntity<String> entity = new HttpEntity<>(headers);
+
+        // Make GET request
+        try {
+            ResponseEntity<Ticket[]> response = restTemplate.exchange(url, HttpMethod.GET, entity, Ticket[].class);
+            Ticket[] tickets = response.getBody();
+
+            // Update status tracking panel with ticket data
+            if (tickets != null) {
+                // Clear existing rows
+                model.setRowCount(0);
+                for (Ticket ticket : tickets) {
+                    model.addRow(new Object[]{ticket.getId(), ticket.getTitle(), ticket.getCategory(), ticket.getPriority(), ticket.getStatus(), ticket.getCreationDate()});
+                }
+            } else {
+                JOptionPane.showMessageDialog(this, "No tickets found.", "Info", JOptionPane.INFORMATION_MESSAGE);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Failed to load tickets. " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+
+
+    // Method to Load Application Icon
     private void setAppIcon() {
         ImageIcon icon = new ImageIcon(getClass().getResource("/support-ticket.png"));
         if (icon.getImage() != null) {
@@ -125,30 +292,29 @@ public class mainTicket extends JFrame {
         String category = (String) categoryComboBox.getSelectedItem();
         String creationDate = creationDateLabel.getText();
 
-        // Créer un objet Ticket
-        Ticket ticket = new Ticket();
-        ticket.setTitle(title);
-        ticket.setDescription(description);
-        ticket.setPriority(priority);
-        ticket.setCategory(category);
-        ticket.setCreationDate(creationDate);
+        //Parse the creation date correctly
+        //DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        //LocalDateTime creationDate = LocalDateTime.parse(creationDateStr, formatter);
 
-        // Création de RestTemplate avec authentification
+        // Create the Ticket object with the form values
+        Ticket ticket = new Ticket(null, title, description, priority, category, creationDate, "New");
+
+        // Create RestTemplate with authentication
         RestTemplate restTemplate = new RestTemplate();
         String url = "http://localhost:8080/api/tickets";
 
-        // Ajouter les headers avec Basic Auth
+        // Set headers with Basic Auth
         HttpHeaders headers = new HttpHeaders();
-        headers.setBasicAuth("admin", "admin"); // Remplace par tes identifiants Spring Security
+        headers.setBasicAuth("admin", "admin");  // Replace with correct credentials
         headers.setContentType(MediaType.APPLICATION_JSON);
 
+        // Create request entity
         HttpEntity<Ticket> request = new HttpEntity<>(ticket, headers);
 
-        // Envoyer la requête HTTP POST
+        // Send the POST request
         try {
             ResponseEntity<Ticket> response = restTemplate.exchange(url, HttpMethod.POST, request, Ticket.class);
 
-            // Vérifier si la requête a réussi
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 Ticket createdTicket = response.getBody();
                 JOptionPane.showMessageDialog(this, "Ticket Created:\n" +
@@ -157,7 +323,11 @@ public class mainTicket extends JFrame {
                         "Priority: " + createdTicket.getPriority() + "\n" +
                         "Category: " + createdTicket.getCategory() + "\n" +
                         "Date: " + createdTicket.getCreationDate(), "Success", JOptionPane.INFORMATION_MESSAGE);
-            } else {
+
+                // Reload tickets to update the status tracking panel
+                loadTickets((DefaultTableModel) ((JTable) statusTable).getModel());
+            }
+            else {
                 JOptionPane.showMessageDialog(this, "Error creating ticket. Server returned: " + response.getStatusCode(), "Error", JOptionPane.ERROR_MESSAGE);
             }
         } catch (Exception e) {
@@ -165,13 +335,12 @@ public class mainTicket extends JFrame {
             JOptionPane.showMessageDialog(this, "Exception: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
 
-        // Reset form fields
+        // Reset form fields after submission
         titleField.setText("");
         descriptionArea.setText("");
         priorityComboBox.setSelectedIndex(0);
         categoryComboBox.setSelectedIndex(0);
     }
-
 
 
     public static void main(String[] args) {

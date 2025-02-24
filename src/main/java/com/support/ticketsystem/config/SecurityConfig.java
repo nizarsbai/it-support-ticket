@@ -13,13 +13,15 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/tickets/**").permitAll() // Autorise l'accès à l'API des tickets
-                        .anyRequest().authenticated()
+                .authorizeRequests(auth -> auth
+                        .requestMatchers("/api/tickets/**").permitAll() // Allow access to tickets API
+                        .anyRequest().authenticated() // Secure other endpoints
                 )
-                .formLogin(login -> login.disable()) // Désactive le formulaire de login
-                .httpBasic(httpBasic -> httpBasic.disable()) // Désactive l'authentification basique
-                .csrf(csrf -> csrf.ignoringRequestMatchers("/api/tickets/**")); // Désactive CSRF uniquement pour l'API tickets
+                .formLogin().disable() // Disable form login
+                .httpBasic().disable() // Disable basic authentication
+                .csrf(csrf -> csrf
+                        .ignoringRequestMatchers("/api/tickets/**")) // Disable CSRF for tickets
+                .cors(); // Enable CORS support
 
         return http.build();
     }
