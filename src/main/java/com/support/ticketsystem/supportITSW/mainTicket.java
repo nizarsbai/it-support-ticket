@@ -13,6 +13,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.support.ticketsystem.entity.User;
 import com.support.ticketsystem.model.AuditLog;
 import com.support.ticketsystem.model.Ticket;
 import org.springframework.http.*;
@@ -32,15 +33,19 @@ public class mainTicket extends JFrame {
     private JPanel ticketCreationPanel;
     private JPanel statusTrackingPanel;
     private JTable statusTable;
+    private User currentUser;
 
-    public mainTicket() {
-        //this.auditLogService = auditLogService;
+    public mainTicket(User user) {
+        this.currentUser = user;
         auditLog = new ArrayList<>(); // Initialize the in-memory log
+        initComponents();
+    }
+    public mainTicket() {
         initComponents();
     }
 
     public void initComponents() {
-        setTitle("Support Ticket System");
+        setTitle("Support IT Ticket System - " + (currentUser != null ? currentUser.getUsername() : "Guest"));
         setSize(600, 400);
         setLocationRelativeTo(null);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -223,7 +228,7 @@ public class mainTicket extends JFrame {
                 Long ticketId = (Long) statusTable.getValueAt(row, 0);
 
                 if (ticketId != null && newStatus != null) {
-                    Ticket ticket = new Ticket(ticketId,
+                    Ticket ticketDTO = new Ticket(ticketId,
                             (String) statusTable.getValueAt(row, 1),
                             (String) statusTable.getValueAt(row, 2),
                             (String) statusTable.getValueAt(row, 3),
@@ -231,7 +236,7 @@ public class mainTicket extends JFrame {
                             (String) statusTable.getValueAt(row, 5),
                             newStatus
                     );
-                    updateTicketStatus(ticket);
+                    updateTicketStatus(ticketDTO);
                 }
             }
 
@@ -271,10 +276,15 @@ public class mainTicket extends JFrame {
         // Clear existing rows in the table
         model.setRowCount(0);
 
+        // Ajout de valeurs statiques pour l'affichage
+        model.addRow(new Object[]{"1", "New", "In Progress", "Ticket assigned to IT support", "2025-02-24 10:00:00"});
+        model.addRow(new Object[]{"2", "In Progress", "Resolved", "Issue fixed by support", "2025-02-24 11:15:30"});
+        model.addRow(new Object[]{"3", "New", "Resolved", "Immediate resolution applied", "2025-02-24 12:45:10"});
+
         // Print the auditLog list for debugging
         System.out.println("Audit Log Entries: " + auditLog);
 
-        // Add each audit log entry to the table
+        // Add each audit log entry from the list to the table
         for (AuditLog log : auditLog) {
             model.addRow(new Object[]{
                     log.getTicketId(),
@@ -288,18 +298,18 @@ public class mainTicket extends JFrame {
 
 
 
-    private void updateStatus(Ticket ticket) {
+    private void updateStatus(Ticket ticketDTO) {
         // Get the old status from the table
         String oldStatus = (String) statusTable.getValueAt(statusTable.getSelectedRow(), 4);
 
         // Update the ticket status (this would update the ticket object itself)
         //ticket.setStatus(newStatus); // Assuming you have a newStatus variable that you want to set
     }
-    public void logAudit(Ticket ticket, String oldStatus, String comment) {
-        System.out.println("Logging audit for ticket " + ticket.getId() + " with status change from " + oldStatus + " to " + ticket.getStatus());
-        auditLog.add(new AuditLog(ticket.getId(), oldStatus, ticket.getStatus(), comment, getCurrentDate()));
+    public void logAudit(Ticket ticketDTO, String oldStatus, String comment) {
+        System.out.println("Logging audit for ticket " + ticketDTO.getId() + " with status change from " + oldStatus + " to " + ticketDTO.getStatus());
+        auditLog.add(new AuditLog(ticketDTO.getId(), oldStatus, ticketDTO.getStatus(), comment, getCurrentDate()));
 
-        auditLog.add(new AuditLog(ticket.getId(), oldStatus, ticket.getStatus(), comment, getCurrentDate()));
+        auditLog.add(new AuditLog(ticketDTO.getId(), oldStatus, ticketDTO.getStatus(), comment, getCurrentDate()));
         System.out.println("Audit Log size: " + auditLog.size());
 
     }
@@ -309,58 +319,58 @@ public class mainTicket extends JFrame {
 
 
 
-    private void handleTicketStatusUpdate(Ticket ticket) {
+    private void handleTicketStatusUpdate(Ticket ticketDTO) {
         // Get the old status before updating
-        String oldStatus = ticket.getStatus();
+        String oldStatus = ticketDTO.getStatus();
 
         // Update the ticket status (this changes the status of the ticket)
-        updateStatus(ticket);
+        updateStatus(ticketDTO);
 
         // Log the audit entry with old status and new status
         String comment = "Status updated"; // You can adjust this based on the specific update
-        logAudit(ticket, oldStatus, comment);
+        logAudit(ticketDTO, oldStatus, comment);
 
         // Refresh the table to display updated data
         loadAuditLogs((DefaultTableModel) ((JTable) ((JScrollPane) tabbedPane.getComponentAt(2)).getViewport().getView()).getModel());
     }
 
-    public void updateStatusForTicket(Ticket ticket) {
+    public void updateStatusForTicket(Ticket ticketDTO) {
         // Now you can use the ticket object
-        String oldStatus = ticket.getStatus();  // Capture old status
-        ticket.setStatus("New");         // Update ticket status
+        String oldStatus = ticketDTO.getStatus();  // Capture old status
+        ticketDTO.setStatus("New");         // Update ticket status
 
         // Log the audit entry
-        logAudit(ticket, oldStatus, "Status updated to: New");
+        logAudit(ticketDTO, oldStatus, "Status updated to: New");
 
         // Refresh the audit log table
-        handleTicketStatusUpdate(ticket);
+        handleTicketStatusUpdate(ticketDTO);
     }
 
 
 
 
 
-    private void updateTicketStatus(Ticket ticket) {
+    private void updateTicketStatus(Ticket ticketDTO) {
         // Ensure ticket ID is not null
-        if (ticket.getId() == null) {
+        if (ticketDTO.getId() == null) {
             JOptionPane.showMessageDialog(this, "Ticket ID is missing.", "Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
         //oldStatus = (String) statusTable.getValueAt(statusTable.getSelectedRow(), 4); // Get the old status from the table
 
         RestTemplate restTemplate = new RestTemplate();
-        String url = "http://localhost:8080/api/tickets/" + ticket.getId(); // Assuming the URL includes ticket ID (as Long)
+        String url = "http://localhost:8080/api/tickets/" + ticketDTO.getId(); // Assuming the URL includes ticket ID (as Long)
 
         // Add headers with Basic Auth
         HttpHeaders headers = new HttpHeaders();
         headers.setBasicAuth("admin", "admin"); // Replace with your Spring Security credentials
         headers.setContentType(MediaType.APPLICATION_JSON);
 
-        HttpEntity<Ticket> request = new HttpEntity<>(ticket, headers);
+        HttpEntity<Ticket> request = new HttpEntity<>(ticketDTO, headers);
 
         try {
             // Print for debugging
-            System.out.println("Updating ticket with ID: " + ticket.getId());
+            System.out.println("Updating ticket with ID: " + ticketDTO.getId());
             System.out.println("URL: " + url);
 
             // Send PUT request to update the ticket
@@ -368,10 +378,10 @@ public class mainTicket extends JFrame {
 
             // Check if the request was successful
             if (response.getStatusCode().is2xxSuccessful()) {
-                Ticket updatedTicket = response.getBody();
+                Ticket updatedTicketDTO = response.getBody();
                 JOptionPane.showMessageDialog(this, "Ticket status updated successfully:\n" +
-                        "ID: " + updatedTicket.getId() + "\n" +
-                        "New Status: " + updatedTicket.getStatus(), "Success", JOptionPane.INFORMATION_MESSAGE);
+                        "ID: " + updatedTicketDTO.getId() + "\n" +
+                        "New Status: " + updatedTicketDTO.getStatus(), "Success", JOptionPane.INFORMATION_MESSAGE);
 
                 // Reload tickets to reflect the status change
                 loadTickets((DefaultTableModel) statusTable.getModel());
@@ -402,14 +412,14 @@ public class mainTicket extends JFrame {
         // Make GET request
         try {
             ResponseEntity<Ticket[]> response = restTemplate.exchange(url, HttpMethod.GET, entity, Ticket[].class);
-            Ticket[] tickets = response.getBody();
+            Ticket[] ticketDTOS = response.getBody();
 
             // Update status tracking panel with ticket data
-            if (tickets != null) {
+            if (ticketDTOS != null) {
                 // Clear existing rows
                 model.setRowCount(0);
-                for (Ticket ticket : tickets) {
-                    model.addRow(new Object[]{ticket.getId(), ticket.getTitle(), ticket.getCategory(), ticket.getPriority(), ticket.getStatus(), ticket.getCreationDate()});
+                for (Ticket ticketDTO : ticketDTOS) {
+                    model.addRow(new Object[]{ticketDTO.getId(), ticketDTO.getTitle(), ticketDTO.getCategory(), ticketDTO.getPriority(), ticketDTO.getStatus(), ticketDTO.getCreationDate()});
                 }
             } else {
                 JOptionPane.showMessageDialog(this, "No tickets found.", "Info", JOptionPane.INFORMATION_MESSAGE);
@@ -449,7 +459,7 @@ public class mainTicket extends JFrame {
         //LocalDateTime creationDate = LocalDateTime.parse(creationDateStr, formatter);
 
         // Create the Ticket object with the form values
-        Ticket ticket = new Ticket(null, title, description, priority, category, creationDate, "New");
+        Ticket ticketDTO = new Ticket(null, title, description, priority, category, creationDate, "New");
 
         // Create RestTemplate with authentication
         RestTemplate restTemplate = new RestTemplate();
@@ -461,20 +471,20 @@ public class mainTicket extends JFrame {
         headers.setContentType(MediaType.APPLICATION_JSON);
 
         // Create request entity
-        HttpEntity<Ticket> request = new HttpEntity<>(ticket, headers);
+        HttpEntity<Ticket> request = new HttpEntity<>(ticketDTO, headers);
 
         // Send the POST request
         try {
             ResponseEntity<Ticket> response = restTemplate.exchange(url, HttpMethod.POST, request, Ticket.class);
 
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                Ticket createdTicket = response.getBody();
+                Ticket createdTicketDTO = response.getBody();
                 JOptionPane.showMessageDialog(this, "Ticket Created:\n" +
-                        "Title: " + createdTicket.getTitle() + "\n" +
-                        "Description: " + createdTicket.getDescription() + "\n" +
-                        "Priority: " + createdTicket.getPriority() + "\n" +
-                        "Category: " + createdTicket.getCategory() + "\n" +
-                        "Date: " + createdTicket.getCreationDate(), "Success", JOptionPane.INFORMATION_MESSAGE);
+                        "Title: " + createdTicketDTO.getTitle() + "\n" +
+                        "Description: " + createdTicketDTO.getDescription() + "\n" +
+                        "Priority: " + createdTicketDTO.getPriority() + "\n" +
+                        "Category: " + createdTicketDTO.getCategory() + "\n" +
+                        "Date: " + createdTicketDTO.getCreationDate(), "Success", JOptionPane.INFORMATION_MESSAGE);
 
                 // Reload tickets to update the status tracking panel
                 loadTickets((DefaultTableModel) ((JTable) statusTable).getModel());
